@@ -1,0 +1,5 @@
+{
+  "name": "Page Capture Pro",
+  "description": "An application to help users capture book pages from websites and compile them into a single, downloadable PDF document. Users can add page image URLs, preview them, reorder pages, and generate a PDF.",
+  "requestFramePermissions": []
+}
