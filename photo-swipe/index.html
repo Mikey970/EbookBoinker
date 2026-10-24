@@ -1,0 +1,424 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover, user-scalable=no" />
+<meta name="apple-mobile-web-app-capable" content="yes" />
+<meta name="mobile-web-app-capable" content="yes" />
+<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent" />
+<meta name="apple-mobile-web-app-title" content="Swipe Clean" />
+<meta name="theme-color" content="#0b0b0f" />
+<title>Swipe Clean</title>
+<style>
+  :root {
+    --bg: #0b0b0f;
+    --card: #17171d;
+    --text: #f4f4f6;
+    --muted: #9a9aa6;
+    --keep: #34c759;
+    --del: #ff3b30;
+    --accent: #0a84ff;
+    --safe-top: env(safe-area-inset-top, 0px);
+    --safe-bottom: env(safe-area-inset-bottom, 0px);
+  }
+  * { box-sizing: border-box; -webkit-tap-highlight-color: transparent; }
+  html, body {
+    margin: 0; height: 100%; background: var(--bg); color: var(--text);
+    font-family: -apple-system, BlinkMacSystemFont, "SF Pro Text", system-ui, sans-serif;
+    overscroll-behavior: none; -webkit-user-select: none; user-select: none;
+  }
+  body { display: flex; flex-direction: column; min-height: 100dvh; }
+  button { font: inherit; color: inherit; border: 0; cursor: pointer; }
+  .screen { display: none; flex: 1; flex-direction: column; padding: calc(var(--safe-top) + 12px) 16px calc(var(--safe-bottom) + 16px); }
+  .screen.active { display: flex; }
+
+  /* Start screen */
+  #start { justify-content: center; align-items: center; text-align: center; gap: 18px; }
+  .logo { width: 88px; height: 88px; border-radius: 22px; background: linear-gradient(135deg, #ff3b30, #ff9f0a 50%, #34c759); display: grid; place-items: center; font-size: 44px; box-shadow: 0 10px 40px rgba(255,120,60,.25); }
+  h1 { margin: 0; font-size: 34px; letter-spacing: -0.5px; }
+  .sub { color: var(--muted); max-width: 320px; line-height: 1.45; margin: 0; }
+  .btn { background: var(--accent); padding: 16px 28px; border-radius: 14px; font-weight: 600; font-size: 17px; width: 100%; max-width: 320px; }
+  .btn.secondary { background: #2a2a33; }
+  .btn.danger { background: var(--del); }
+  .btn:active { transform: scale(.98); opacity: .9; }
+  .hint-row { display: flex; gap: 22px; color: var(--muted); font-size: 14px; }
+  .hint-row span b { color: var(--del); }
+  .hint-row span:last-child b { color: var(--keep); }
+
+  /* Swipe screen */
+  .topbar { display: flex; align-items: center; justify-content: space-between; gap: 12px; height: 40px; }
+  .topbar .count { font-weight: 600; font-variant-numeric: tabular-nums; }
+  .topbar .link { background: none; color: var(--accent); padding: 8px 4px; font-size: 16px; }
+  .progress { height: 4px; background: #24242c; border-radius: 4px; overflow: hidden; margin: 8px 0 14px; }
+  .progress > div { height: 100%; width: 0; background: var(--accent); transition: width .25s; }
+
+  .deck { position: relative; flex: 1; min-height: 0; }
+  .card {
+    position: absolute; inset: 0; border-radius: 22px; overflow: hidden; background: var(--card);
+    box-shadow: 0 12px 40px rgba(0,0,0,.5); touch-action: none; will-change: transform;
+  }
+  .card img { width: 100%; height: 100%; object-fit: contain; display: block; pointer-events: none; -webkit-user-drag: none; }
+  .card.behind { transform: scale(.94) translateY(14px); filter: brightness(.6); transition: transform .25s, filter .25s; }
+  .card .meta { position: absolute; left: 0; right: 0; bottom: 0; padding: 40px 16px 14px; background: linear-gradient(transparent, rgba(0,0,0,.75)); font-size: 13px; color: #ddd; }
+  .stamp {
+    position: absolute; top: 28px; padding: 6px 14px; border: 4px solid; border-radius: 10px;
+    font-size: 34px; font-weight: 800; letter-spacing: 2px; opacity: 0; text-transform: uppercase;
+    background: rgba(0,0,0,.25);
+  }
+  .stamp.keep { left: 22px; color: var(--keep); border-color: var(--keep); transform: rotate(-14deg); }
+  .stamp.del { right: 22px; color: var(--del); border-color: var(--del); transform: rotate(14deg); }
+
+  .actions { display: flex; justify-content: center; align-items: center; gap: 26px; padding-top: 16px; }
+  .round { width: 68px; height: 68px; border-radius: 50%; background: #1e1e25; display: grid; place-items: center; font-size: 30px; box-shadow: 0 6px 20px rgba(0,0,0,.4); }
+  .round.small { width: 50px; height: 50px; font-size: 22px; }
+  .round.del { color: var(--del); }
+  .round.keep { color: var(--keep); }
+  .round:active { transform: scale(.92); }
+  .round:disabled { opacity: .3; }
+  .tally { display: flex; justify-content: center; gap: 22px; color: var(--muted); font-size: 14px; padding-top: 10px; font-variant-numeric: tabular-nums; }
+  .tally .d { color: var(--del); } .tally .k { color: var(--keep); }
+
+  /* Review screen */
+  #review { gap: 14px; overflow-y: auto; }
+  #review h2 { margin: 6px 0 0; font-size: 28px; }
+  .stats { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; }
+  .stat { background: var(--card); border-radius: 16px; padding: 14px; }
+  .stat .n { font-size: 30px; font-weight: 700; font-variant-numeric: tabular-nums; }
+  .stat.d .n { color: var(--del); } .stat.k .n { color: var(--keep); }
+  .stat .l { color: var(--muted); font-size: 13px; }
+  .tabs { display: flex; background: #1e1e25; border-radius: 10px; padding: 3px; }
+  .tabs button { flex: 1; padding: 8px; border-radius: 8px; background: none; font-size: 14px; font-weight: 600; color: var(--muted); }
+  .tabs button.on { background: #3a3a44; color: var(--text); }
+  .grid { display: grid; grid-template-columns: repeat(3, 1fr); gap: 4px; }
+  .thumb { position: relative; aspect-ratio: 1; background: var(--card); border-radius: 6px; overflow: hidden; padding: 0; }
+  .thumb img { width: 100%; height: 100%; object-fit: cover; display: block; }
+  .thumb .name { position: absolute; left: 0; right: 0; bottom: 0; font-size: 10px; padding: 3px 4px; background: rgba(0,0,0,.6); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+  .empty { color: var(--muted); text-align: center; padding: 30px 0; }
+  .note { background: var(--card); border-radius: 16px; padding: 14px 16px; color: var(--muted); font-size: 14px; line-height: 1.5; }
+  .note b { color: var(--text); }
+  .note ol { margin: 6px 0 0; padding-left: 20px; }
+  .btn-col { display: flex; flex-direction: column; align-items: center; gap: 10px; }
+
+  .toast { position: fixed; left: 50%; top: calc(var(--safe-top) + 56px); transform: translateX(-50%) translateY(-200px); background: #2a2a33; padding: 12px 18px; border-radius: 12px; font-size: 14px; transition: transform .3s; z-index: 10; max-width: 90vw; text-align: center; }
+  .toast.show { transform: translateX(-50%) translateY(0); }
+  .loading { position: absolute; inset: 0; display: grid; place-items: center; color: var(--muted); }
+</style>
+</head>
+<body>
+
+<!-- Start -->
+<section id="start" class="screen active">
+  <div class="logo">🗂️</div>
+  <h1>Swipe Clean</h1>
+  <p class="sub">Choose photos from your library and go through them one at a time. Swipe to sort each one.</p>
+  <div class="hint-row"><span><b>←</b> Delete</span><span>Keep <b>→</b></span></div>
+  <input id="picker" type="file" accept="image/*" multiple hidden />
+  <button class="btn" id="pickBtn">Choose Photos</button>
+  <p class="sub" style="font-size:13px">Your photos stay on your phone. Nothing is uploaded.</p>
+</section>
+
+<!-- Swipe -->
+<section id="swipe" class="screen">
+  <div class="topbar">
+    <button class="link" id="finishBtn">Finish</button>
+    <div class="count" id="count">0 / 0</div>
+    <button class="link" id="addBtn">Add</button>
+  </div>
+  <div class="progress"><div id="bar"></div></div>
+  <div class="deck" id="deck"></div>
+  <div class="actions">
+    <button class="round del" id="delBtn" aria-label="Delete">✕</button>
+    <button class="round small" id="undoBtn" aria-label="Undo" disabled>↺</button>
+    <button class="round keep" id="keepBtn" aria-label="Keep">♥</button>
+  </div>
+  <div class="tally"><span class="d" id="tDel">0 to delete</span><span class="k" id="tKeep">0 kept</span></div>
+</section>
+
+<!-- Review -->
+<section id="review" class="screen">
+  <div class="topbar">
+    <button class="link" id="backBtn">‹ Back</button>
+    <div></div>
+    <button class="link" id="restartBtn">New</button>
+  </div>
+  <h2>Summary</h2>
+  <div class="stats">
+    <div class="stat d"><div class="n" id="sDel">0</div><div class="l">marked to delete</div></div>
+    <div class="stat k"><div class="n" id="sKeep">0</div><div class="l">kept</div></div>
+  </div>
+  <div class="note" id="howTo">
+    <b>Websites can't delete from your Photos library</b> — Apple only lets the Photos app do that. To finish cleaning up:
+    <ol>
+      <li>Look over the list below (tap a photo to move it to Keep).</li>
+      <li>Open <b>Photos</b>, tap <b>Select</b>, and tap the matching photos.</li>
+      <li>Tap the trash icon. They stay in <b>Recently Deleted</b> for 30 days.</li>
+    </ol>
+  </div>
+  <div class="tabs">
+    <button class="on" data-tab="delete">To Delete</button>
+    <button data-tab="keep">Kept</button>
+  </div>
+  <div class="grid" id="grid"></div>
+  <div class="btn-col">
+    <button class="btn secondary" id="shareBtn">Save Kept Photos…</button>
+  </div>
+</section>
+
+<div class="toast" id="toast"></div>
+
+<script>
+(() => {
+  const $ = (id) => document.getElementById(id);
+  const screens = { start: $('start'), swipe: $('swipe'), review: $('review') };
+
+  // photos: [{ file, url|null, decision: null|'keep'|'delete' }]
+  let photos = [];
+  let index = 0;          // next undecided card position
+  let history = [];       // indices decided, for undo
+  let reviewTab = 'delete';
+
+  const show = (name) => {
+    Object.values(screens).forEach(s => s.classList.remove('active'));
+    screens[name].classList.add('active');
+    window.scrollTo(0, 0);
+  };
+
+  let toastTimer;
+  const toast = (msg) => {
+    const t = $('toast');
+    t.textContent = msg;
+    t.classList.add('show');
+    clearTimeout(toastTimer);
+    toastTimer = setTimeout(() => t.classList.remove('show'), 2200);
+  };
+
+  const urlFor = (p) => (p.url ||= URL.createObjectURL(p.file));
+  // Only keep object URLs alive near the current card so big batches don't eat memory.
+  const trimUrls = () => {
+    photos.forEach((p, i) => {
+      if (p.url && (i < index - 3 || i > index + 3)) { URL.revokeObjectURL(p.url); p.url = null; }
+    });
+  };
+
+  // ---------- Picking ----------
+  const picker = $('picker');
+  $('pickBtn').onclick = () => picker.click();
+  $('addBtn').onclick = () => picker.click();
+  picker.onchange = () => {
+    const files = [...picker.files].filter(f => f.type.startsWith('image/') || /\.(heic|heif|jpe?g|png|gif|webp)$/i.test(f.name));
+    picker.value = '';
+    if (!files.length) return;
+    const wasDone = index >= photos.length;
+    files.sort((a, b) => a.lastModified - b.lastModified);
+    photos.push(...files.map(file => ({ file, url: null, decision: null })));
+    toast(`Added ${files.length} photo${files.length === 1 ? '' : 's'}`);
+    show('swipe');
+    if (wasDone || !$('deck').children.length) render();
+    else updateHud();
+  };
+
+  // ---------- Deck ----------
+  const deck = $('deck');
+
+  function makeCard(i) {
+    const p = photos[i];
+    const card = document.createElement('div');
+    card.className = 'card';
+    card.dataset.i = i;
+    const img = document.createElement('img');
+    img.alt = '';
+    img.decoding = 'async';
+    img.src = urlFor(p);
+    img.onerror = () => { card.querySelector('.meta').textContent = `${p.file.name} — can't preview this file`; };
+    const d = new Date(p.file.lastModified);
+    card.innerHTML = `<div class="stamp keep">Keep</div><div class="stamp del">Delete</div><div class="meta"></div>`;
+    card.prepend(img);
+    card.querySelector('.meta').textContent = `${p.file.name} · ${d.toLocaleDateString()} · ${(p.file.size / 1048576).toFixed(1)} MB`;
+    return card;
+  }
+
+  function render() {
+    deck.innerHTML = '';
+    trimUrls();
+    if (index >= photos.length) { openReview(); return; }
+    if (index + 1 < photos.length) {
+      const back = makeCard(index + 1);
+      back.classList.add('behind');
+      deck.appendChild(back);
+    }
+    const top = makeCard(index);
+    deck.appendChild(top);
+    attachDrag(top);
+    // Warm up the one after next.
+    if (index + 2 < photos.length) { const pre = new Image(); pre.src = urlFor(photos[index + 2]); }
+    updateHud();
+  }
+
+  function updateHud() {
+    const total = photos.length;
+    $('count').textContent = `${Math.min(index + 1, total)} / ${total}`;
+    $('bar').style.width = total ? `${(index / total) * 100}%` : '0';
+    const del = photos.filter(p => p.decision === 'delete').length;
+    const keep = photos.filter(p => p.decision === 'keep').length;
+    $('tDel').textContent = `${del} to delete`;
+    $('tKeep').textContent = `${keep} kept`;
+    $('undoBtn').disabled = history.length === 0;
+  }
+
+  function decide(decision, card) {
+    if (index >= photos.length) return;
+    card ||= deck.lastElementChild;
+    if (!card || card.dataset.leaving) return;
+    card.dataset.leaving = '1';
+    photos[index].decision = decision;
+    history.push(index);
+    if (navigator.vibrate) navigator.vibrate(12);
+
+    const dir = decision === 'keep' ? 1 : -1;
+    card.style.transition = 'transform .32s ease-out, opacity .32s';
+    card.style.transform = `translate(${dir * window.innerWidth * 1.3}px, 40px) rotate(${dir * 28}deg)`;
+    card.style.opacity = '0';
+    card.querySelector(dir > 0 ? '.stamp.keep' : '.stamp.del').style.opacity = 1;
+    const behind = deck.querySelector('.behind');
+    if (behind) { behind.style.transform = 'none'; behind.style.filter = 'none'; }
+
+    index++;
+    updateHud();
+    setTimeout(render, 280);
+  }
+
+  function undo() {
+    if (!history.length) return;
+    const i = history.pop();
+    photos[i].decision = null;
+    index = i;
+    show('swipe');
+    render();
+  }
+
+  function attachDrag(card) {
+    let startX = 0, startY = 0, dx = 0, dy = 0, dragging = false, id = null;
+    const keepStamp = card.querySelector('.stamp.keep');
+    const delStamp = card.querySelector('.stamp.del');
+    const threshold = () => Math.min(120, window.innerWidth * 0.28);
+
+    card.addEventListener('pointerdown', (e) => {
+      if (card.dataset.leaving) return;
+      dragging = true; id = e.pointerId;
+      startX = e.clientX; startY = e.clientY; dx = dy = 0;
+      card.setPointerCapture(id);
+      card.style.transition = 'none';
+    });
+    card.addEventListener('pointermove', (e) => {
+      if (!dragging || e.pointerId !== id) return;
+      dx = e.clientX - startX; dy = e.clientY - startY;
+      card.style.transform = `translate(${dx}px, ${dy * 0.3}px) rotate(${dx / 18}deg)`;
+      const r = Math.min(Math.abs(dx) / threshold(), 1);
+      keepStamp.style.opacity = dx > 0 ? r : 0;
+      delStamp.style.opacity = dx < 0 ? r : 0;
+    });
+    const end = (e) => {
+      if (!dragging || e.pointerId !== id) return;
+      dragging = false;
+      if (Math.abs(dx) > threshold()) {
+        decide(dx > 0 ? 'keep' : 'delete', card);
+      } else {
+        card.style.transition = 'transform .25s cubic-bezier(.2,.9,.3,1.3)';
+        card.style.transform = '';
+        keepStamp.style.opacity = delStamp.style.opacity = 0;
+      }
+    };
+    card.addEventListener('pointerup', end);
+    card.addEventListener('pointercancel', end);
+  }
+
+  $('keepBtn').onclick = () => decide('keep');
+  $('delBtn').onclick = () => decide('delete');
+  $('undoBtn').onclick = undo;
+  $('finishBtn').onclick = openReview;
+
+  document.addEventListener('keydown', (e) => {
+    if (!screens.swipe.classList.contains('active')) return;
+    if (e.key === 'ArrowRight') decide('keep');
+    else if (e.key === 'ArrowLeft') decide('delete');
+    else if ((e.metaKey || e.ctrlKey) && e.key === 'z') undo();
+  });
+
+  // ---------- Review ----------
+  let gridUrls = [];
+  function openReview() {
+    $('sDel').textContent = photos.filter(p => p.decision === 'delete').length;
+    $('sKeep').textContent = photos.filter(p => p.decision === 'keep').length;
+    $('backBtn').style.visibility = index < photos.length || history.length ? 'visible' : 'hidden';
+    renderGrid();
+    show('review');
+  }
+
+  function renderGrid() {
+    gridUrls.forEach(u => URL.revokeObjectURL(u));
+    gridUrls = [];
+    const grid = $('grid');
+    grid.innerHTML = '';
+    document.querySelectorAll('.tabs button').forEach(b => b.classList.toggle('on', b.dataset.tab === reviewTab));
+    $('shareBtn').style.display = reviewTab === 'keep' ? '' : 'none';
+    const list = photos.filter(p => p.decision === reviewTab);
+    if (!list.length) {
+      grid.innerHTML = `<div class="empty" style="grid-column:1/-1">${reviewTab === 'delete' ? 'Nothing marked for deletion.' : 'No kept photos yet.'}</div>`;
+      return;
+    }
+    for (const p of list) {
+      const b = document.createElement('button');
+      b.className = 'thumb';
+      const img = document.createElement('img');
+      img.loading = 'lazy';
+      const u = URL.createObjectURL(p.file);
+      gridUrls.push(u);
+      img.src = u;
+      const name = document.createElement('div');
+      name.className = 'name';
+      name.textContent = p.file.name;
+      b.append(img, name);
+      b.onclick = () => {
+        p.decision = p.decision === 'delete' ? 'keep' : 'delete';
+        toast(p.decision === 'keep' ? 'Moved to Kept' : 'Moved to Delete');
+        openReview();
+      };
+      grid.appendChild(b);
+    }
+  }
+
+  document.querySelectorAll('.tabs button').forEach(b => b.onclick = () => { reviewTab = b.dataset.tab; renderGrid(); });
+
+  $('backBtn').onclick = () => {
+    if (index < photos.length) { show('swipe'); render(); }
+    else undo();
+  };
+
+  $('restartBtn').onclick = () => {
+    if (photos.some(p => p.decision) && !confirm('Start over with new photos? Your current sorting will be cleared.')) return;
+    photos.forEach(p => p.url && URL.revokeObjectURL(p.url));
+    gridUrls.forEach(u => URL.revokeObjectURL(u));
+    photos = []; index = 0; history = []; gridUrls = []; reviewTab = 'delete';
+    deck.innerHTML = '';
+    show('start');
+  };
+
+  $('shareBtn').onclick = async () => {
+    const files = photos.filter(p => p.decision === 'keep').map(p => p.file);
+    if (!files.length) return toast('No kept photos to save');
+    if (navigator.canShare && navigator.canShare({ files })) {
+      try { await navigator.share({ files }); }
+      catch (e) { if (e.name !== 'AbortError') toast('Sharing failed — try fewer photos'); }
+    } else {
+      toast('Sharing files isn\'t supported in this browser');
+    }
+  };
+
+  // Ask before leaving mid-session so sorting isn't lost by accident.
+  window.addEventListener('beforeunload', (e) => {
+    if (photos.some(p => p.decision)) { e.preventDefault(); e.returnValue = ''; }
+  });
+})();
+</script>
+</body>
+</html>
