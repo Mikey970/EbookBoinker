@@ -98,6 +98,14 @@
   .note b { color: var(--text); }
   .note ol { margin: 6px 0 0; padding-left: 20px; }
   .btn-col { display: flex; flex-direction: column; align-items: center; gap: 10px; }
+  .btn:disabled { opacity: .35; }
+  .status { color: var(--muted); font-size: 14px; text-align: center; line-height: 1.45; max-width: 340px; }
+  #manualList { width: 100%; max-width: 340px; height: 70px; background: var(--card); color: var(--text); border: 1px solid #333; border-radius: 10px; font-size: 12px; padding: 8px; -webkit-user-select: text; user-select: text; }
+  .note.warn { color: #ffd60a; }
+  .note summary { cursor: pointer; }
+  .note p { margin: 10px 0 0; }
+  .note li { margin-bottom: 4px; }
+  .note code { background: #2a2a33; color: var(--text); padding: 1px 6px; border-radius: 4px; }
 
   .toast { position: fixed; left: 50%; top: calc(var(--safe-top) + 56px); transform: translateX(-50%) translateY(-200px); background: #2a2a33; padding: 12px 18px; border-radius: 12px; font-size: 14px; transition: transform .3s; z-index: 10; max-width: 90vw; text-align: center; }
   .toast.show { transform: translateX(-50%) translateY(0); }
@@ -114,7 +122,7 @@
   <div class="hint-row"><span><b>←</b> Delete</span><span>Keep <b>→</b></span></div>
   <input id="picker" type="file" accept="image/*" multiple hidden />
   <button class="btn" id="pickBtn">Choose Photos</button>
-  <p class="sub" style="font-size:13px">Your photos stay on your phone. Nothing is uploaded.</p>
+  <p class="sub" style="font-size:13px">Your photos stay on your phone. Nothing is uploaded. Deleting uses a Shortcut you set up once (instructions on the summary screen).</p>
 </section>
 
 <!-- Swipe -->
@@ -146,14 +154,28 @@
     <div class="stat d"><div class="n" id="sDel">0</div><div class="l">marked to delete</div></div>
     <div class="stat k"><div class="n" id="sKeep">0</div><div class="l">kept</div></div>
   </div>
-  <div class="note" id="howTo">
-    <b>Websites can't delete from your Photos library</b> — Apple only lets the Photos app do that. To finish cleaning up:
-    <ol>
-      <li>Look over the list below (tap a photo to move it to Keep).</li>
-      <li>Open <b>Photos</b>, tap <b>Select</b>, and tap the matching photos.</li>
-      <li>Tap the trash icon. They stay in <b>Recently Deleted</b> for 30 days.</li>
-    </ol>
+  <div class="btn-col">
+    <button class="btn danger" id="deleteBtn">Delete in Photos</button>
+    <div class="status" id="deleteStatus" hidden></div>
+    <textarea id="manualList" readonly hidden></textarea>
   </div>
+  <div class="note warn" id="nameWarn" hidden></div>
+  <details class="note" id="setup">
+    <summary><b>One-time setup: the "Swipe Clean" Shortcut</b></summary>
+    <p>Websites aren't allowed to delete photos, but Apple's Shortcuts app is. "Delete in Photos" copies your list and opens a Shortcut that finds those photos and deletes them. Build it once:</p>
+    <ol>
+      <li>Open <b>Shortcuts</b>, tap <b>+</b>, and name it exactly <b>Swipe Clean</b>.</li>
+      <li>Add <b>Get Clipboard</b>.</li>
+      <li>Add <b>Find Photos</b>. Set <b>Sort by</b> to Creation Date, <b>Order</b> to Latest First, and turn on <b>Limit</b> (e.g. 1000). It only checks that many recent photos, so raise it if you're cleaning older ones.</li>
+      <li>Add <b>Repeat with Each</b> (item in Photos).</li>
+      <li>Inside the repeat, add <b>Get Details of Images</b> and pick <b>Name</b> of <b>Repeat Item</b>.</li>
+      <li>Add <b>Text</b> and type <code>|</code>, then the <b>Name</b> variable, then <code>|</code>.</li>
+      <li>Add <b>If</b>: <b>Clipboard</b> <b>contains</b> <b>Text</b>.</li>
+      <li>Inside the If, add <b>Add to Variable</b>: <b>Repeat Item</b> to a new variable called <b>ToDelete</b>.</li>
+      <li>After <b>End Repeat</b>, add <b>Delete Photos</b> with <b>ToDelete</b>.</li>
+    </ol>
+    <p>iOS asks you to confirm before anything is deleted, and deleted photos stay in <b>Recently Deleted</b> for 30 days.</p>
+  </details>
   <div class="tabs">
     <button class="on" data-tab="delete">To Delete</button>
     <button data-tab="keep">Kept</button>
@@ -350,6 +372,11 @@
     $('sDel').textContent = photos.filter(p => p.decision === 'delete').length;
     $('sKeep').textContent = photos.filter(p => p.decision === 'keep').length;
     $('backBtn').style.visibility = index < photos.length || history.length ? 'visible' : 'hidden';
+    const toDelete = photos.filter(p => p.decision === 'delete');
+    $('deleteBtn').disabled = !toDelete.length;
+    $('deleteBtn').textContent = toDelete.length ? `Delete ${toDelete.length} in Photos` : 'Delete in Photos';
+    $('deleteStatus').hidden = $('manualList').hidden = true;
+    checkNames(toDelete);
     renderGrid();
     show('review');
   }
@@ -387,6 +414,37 @@
     }
   }
 
+  // ---------- Delete via the "Swipe Clean" Shortcut ----------
+  // The Shortcut compares "|<name>|" against the clipboard, so names are sent without extensions.
+  const baseName = (f) => f.name.replace(/\.[^.]+$/, '');
+
+  function checkNames(list) {
+    const names = list.map(p => baseName(p.file));
+    const generic = names.filter(n => /^(image|photo|img)$/i.test(n) || /^\d+$/.test(n)).length;
+    const dupes = names.length - new Set(names).size;
+    const warn = $('nameWarn');
+    warn.hidden = !(generic || dupes);
+    warn.textContent = 'Some photos came through with generic or repeated file names, so the Shortcut may not be able to find them. Those ones need deleting by hand in Photos.';
+  }
+
+  $('deleteBtn').onclick = () => {
+    const names = photos.filter(p => p.decision === 'delete').map(p => baseName(p.file));
+    if (!names.length) return;
+    const text = `|${names.join('|')}|`;
+    const status = $('deleteStatus');
+    status.hidden = false;
+    status.textContent = `Copied ${names.length} photo name${names.length === 1 ? '' : 's'}. Opening Shortcuts… If it doesn't open, open the Shortcuts app and run "Swipe Clean".`;
+    // Start the copy and the app switch in the same tap; Safari drops the tap's permission after an await.
+    (navigator.clipboard ? navigator.clipboard.writeText(text) : Promise.reject()).catch(() => {
+      const box = $('manualList');
+      box.value = text;
+      box.hidden = false;
+      box.select();
+      status.textContent = 'Copy the list below, then open the Shortcuts app and run "Swipe Clean".';
+    });
+    try { location.href = 'shortcuts://run-shortcut?name=' + encodeURIComponent('Swipe Clean'); } catch {}
+  };
+
   document.querySelectorAll('.tabs button').forEach(b => b.onclick = () => { reviewTab = b.dataset.tab; renderGrid(); });
 
   $('backBtn').onclick = () => {
@@ -395,7 +453,14 @@
   };
 
   $('restartBtn').onclick = () => {
-    if (photos.some(p => p.decision) && !confirm('Start over with new photos? Your current sorting will be cleared.')) return;
+    const btn = $('restartBtn');
+    if (photos.some(p => p.decision) && !btn.dataset.armed) {
+      btn.dataset.armed = '1'; btn.textContent = 'Tap to confirm';
+      toast('Tap again to clear and start over');
+      setTimeout(() => { delete btn.dataset.armed; btn.textContent = 'New'; }, 3000);
+      return;
+    }
+    delete btn.dataset.armed; btn.textContent = 'New';
     photos.forEach(p => p.url && URL.revokeObjectURL(p.url));
     gridUrls.forEach(u => URL.revokeObjectURL(u));
     photos = []; index = 0; history = []; gridUrls = []; reviewTab = 'delete';

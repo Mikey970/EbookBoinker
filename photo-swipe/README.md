@@ -8,10 +8,19 @@ A single-page website for iPhone that helps you clean up your photo library Tind
 
 Everything runs in the browser; nothing is uploaded.
 
-## Limitation
+## Deleting photos
 
-Browsers on iOS are not allowed to delete items from the Photos library. Swipe Clean builds the
-"To Delete" list; you then delete those photos in the Photos app (Select → tap them → trash).
+Browsers on iOS aren't allowed to delete from the Photos library, but the Shortcuts app is.
+**Delete in Photos** copies the "To Delete" file names to the clipboard (as `|IMG_0001|IMG_0002|`)
+and opens a Shortcut named **Swipe Clean**, which you build once (steps are on the summary screen):
+
+1. Get Clipboard
+2. Find Photos (sort by Creation Date, latest first, limit e.g. 1000)
+3. Repeat with Each photo → Get Details of Images: Name → Text `|Name|` → If Clipboard contains Text → Add to Variable `ToDelete`
+4. Delete Photos: `ToDelete` (iOS asks to confirm; photos go to Recently Deleted for 30 days)
+
+Matching relies on Safari passing the photos' original names (e.g. `IMG_1234`). The page warns when it
+gets generic or repeated names, since those can't be matched.
 
 ## Running it
 
